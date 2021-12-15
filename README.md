@@ -29,7 +29,7 @@ See cmd/main.go and tests for more examples.
     )
     
     func main() {
-        url, _ := url.Parse("http://localhost/?sort=+name,-id&limit=10&id=1&i[eq]=5&s[eq]=one&email[like]=*tim*|name[like]=*tim*")
+        url, _ := url.Parse("http://localhost/?sort=+name,-id&limit=10&id=1&i[eq]=5&s[eq]=one&email[like]=*tim*|name[like]=*tim*&jfield(a,b)[like]=super")
         q, _ := rqp.NewParse(url.Query(), rqp.Validations{
             "limit:required": rqp.MinMax(10, 100),  // limit must present in the Query part and must be between 10 and 100 (default: Min(1))
             "sort":           rqp.In("id", "name"), // sort could be or not in the query but if it is present it must be equal to "in" or "name"
@@ -69,11 +69,13 @@ See cmd/main.go and tests for more examples.
 * `:required` - parameter is required. Must present in the query string. Raise error if not.
 * `:int` - parameter must be convertable to int type. Raise error if not.
 * `:bool` - parameter must be convertable to bool type. Raise error if not.
+* `:jsonb` - Parameter must be a jsonb type on the database side. Raise error if not.
 
 ## Supported types
 - `string` - the default type for all provided filters if not specified another. Could be compared by `eq, ne, gt, lt, gte, lte, like, ilike, nlike, nilike, in, nin, is, not` methods (`nlike, nilike` means `NOT LIKE, NOT ILIKE` respectively, `in, nin` means `IN, NOT IN` respectively, `is, not` for comparison to NULL `IS NULL, IS NOT NULL`).
 - `int` - integer type. Must be specified with tag ":int". Could be compared by `eq, ne, gt, lt, gte, lte, in, nin` methods.
 - `bool` - boolean type. Must be specified with tag ":bool". Could be compared by `eq` method.
+- `jsonb` - json type. Must be specified with tag ":jsonb". Could be compared by all string methods. Extracts text at path for json field, refers to jsonb columns in Postgresql.
 
 ## Date usage
 This is simple example to show logic which you can extend.
