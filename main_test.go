@@ -250,6 +250,11 @@ func TestWhere(t *testing.T) {
 		{url: "?b=true1", err: "b: bad format"},
 		{url: "?b[not]=true", err: "b[not]: method are not allowed"},
 		{url: "?b[eq]=true,false", err: "b[eq]: method are not allowed"},
+		// JSON tests
+		{url: "?j(a,b)[eq]=super", expected: " WHERE jsonb_extract_path_text(j, '{a,b}') = ?"},
+		{url: "?j(a,b)[ilike]=super", expected: " WHERE jsonb_extract_path_text(j, '{a,b}') ILIKE ?"},
+		{url: "?j(a,b)[in]=super,best", expected: " WHERE jsonb_extract_path_text(j, '{a,b}') IN (?, ?)"},
+		{url: "?j(a,b)[in]=super,best&id=5", expected: " WHERE id = ? AND jsonb_extract_path_text(j, '{a,b}') IN (?, ?)", expected2: " WHERE jsonb_extract_path_text(j, '{a,b}') IN (?, ?) AND id = ?"},
 	}
 	for _, c := range cases {
 		t.Run(c.url, func(t *testing.T) {
@@ -269,6 +274,7 @@ func TestWhere(t *testing.T) {
 				),
 				"u:string": nil,
 				"b:bool":   nil,
+				"j:jsonb":  nil,
 				"custom": func(value interface{}) error {
 					return nil
 				},
