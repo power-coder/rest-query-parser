@@ -18,6 +18,7 @@ const (
 // Filter represents a filter defined in the query part of URL
 type Filter struct {
 	Key    string // key from URL (eg. "id[eq]")
+	Path   string // subKey for JSON only (eg. "metadata['a,b,0'][eq]"), subKey is generally referred to as path inside JSON.
 	Name   string // name of filter, takes from Key (eg. "id")
 	Method Method // compare method, takes from Key (eg. EQ)
 	Value  interface{}
@@ -55,6 +56,8 @@ func detectType(name string, validations Validations) string {
 					return "int"
 				case "bool", "b":
 					return "bool"
+				case "jsonb", "j":
+					return "jsonb"
 				default:
 					return "string"
 				}
@@ -82,6 +85,11 @@ func newFilter(rawKey string, value string, delimiter string, validations Valida
 
 	// set Key, Name, Method
 	if err := f.parseKey(rawKey); err != nil {
+		return nil, err
+	}
+
+	// set Path after parsing key.
+	if err := f.parsePath(rawKey); err != nil {
 		return nil, err
 	}
 
@@ -143,7 +151,12 @@ func (f *Filter) parseKey(key string) error {
 
 	spos := strings.Index(key, "[")
 	if spos != -1 {
-		f.Name = key[:spos]
+		// If we have round bracket, as part of Json behaviour !
+		spos_round := strings.Index(key, "(")
+		if spos_round == -1 {
+			spos_round = spos
+		}
+		f.Name = key[:spos_round]
 		epos := strings.Index(key[spos:], "]")
 		if epos != -1 {
 			// go inside brekets
@@ -160,7 +173,19 @@ func (f *Filter) parseKey(key string) error {
 	} else {
 		f.Name = key
 	}
+	return nil
+}
 
+// parseKey parses key to set f.Name and f.Method
+//   id[eq] -> f.Name = "id", f.Method = EQ
+func (f *Filter) parsePath(key string) error {
+	//There is no default Path if it does not exist.
+	f.Path = "{}"
+	spos := strings.Index(key, "(")
+	epos := strings.Index(key, ")")
+	if spos != -1 && epos != -1 && epos-spos > 0 {
+		f.Path = "{" + key[spos+1:epos] + "}"
+	}
 	return nil
 }
 
@@ -174,7 +199,7 @@ func (f *Filter) parseValue(valueType string, value string, delimiter string) er
 	} else {
 		list = append(list, value)
 	}
-
+	//fmt.Println("valuetype is: " + valueType)
 	switch valueType {
 	case "int":
 		err := f.setInt(list)
@@ -186,6 +211,17 @@ func (f *Filter) parseValue(valueType string, value string, delimiter string) er
 		if err != nil {
 			return err
 		}
+	case "jsonb":
+		err := f.setJson(list)
+		if err != nil {
+			return err
+		}
+		// Jsonb after path parsing qualifies for text matching behaviours
+		err1 := f.setString(list)
+		if err1 != nil {
+			return err1
+		}
+
 	default: // str, string and all other unknown types will handle as string
 		err := f.setString(list)
 		if err != nil {
@@ -323,6 +359,18 @@ func (f *Filter) setString(list []string) error {
 			f.Value = list
 			return nil
 		}
+	}
+	return ErrMethodNotAllowed
+}
+
+/*
+Intended usecases:
+JPATH to behave as string qualifier for path provided in json
+*/
+func (f *Filter) setJson(list []string) error {
+	if len(f.Path) != 0 {
+		f.Name = "jsonb_extract_path_text(" + f.Name + ", '" + f.Path + "')"
+		return nil
 	}
 	return ErrMethodNotAllowed
 }
